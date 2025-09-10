@@ -21,7 +21,8 @@ public class BattleManager : MonoBehaviour
     public TextMeshProUGUI resultText;
 
     [Header("Savaş Ayarları")]
-    public float attackInterval = 1.5f;
+    public float attackAnimDuration = 0.4f; // Saldırı animasyonlarının toplam süresi
+    public float turnDelay = 1.0f; // Her çatışma arasındaki bekleme süresi
 
     private BattleCharacter player;
     private BattleCharacter enemy;
@@ -34,13 +35,15 @@ public class BattleManager : MonoBehaviour
 
     void SetupBattle()
     {
-        // Oyuncu verilerini PlayerDataManager'dan çek
+        // --- Oyuncu Kurulumu ---
         var playerData = PlayerDataManager.Instance;
         GameObject playerGO = Instantiate(playerPrefab, playerSpawnPoint.position, playerSpawnPoint.rotation);
+        // ÖNEMLİ: Artık iki script'i de ekliyoruz
         player = playerGO.AddComponent<BattleCharacter>();
+        playerGO.AddComponent<CharacterAnimator>(); // Animator'ü de ekle
         player.Setup(playerData.currentAttack, playerData.currentShield);
 
-        // Düşman verilerini LevelData'dan çek
+        // --- Düşman Kurulumu ---
         EnemyData enemyData = currentLevel.enemiesInLevel[0];
         GameObject enemyGO = new GameObject("Enemy");
         enemyGO.transform.position = enemySpawnPoint.position;
@@ -48,36 +51,41 @@ public class BattleManager : MonoBehaviour
         sr.sprite = enemyData.enemySprite;
         sr.sortingOrder = 5;
         enemyGO.transform.localScale = new Vector3(1.5f, 1.5f, 1.5f);
+        // ÖNEMLİ: Artık iki script'i de ekliyoruz
         enemy = enemyGO.AddComponent<BattleCharacter>();
+        enemyGO.AddComponent<CharacterAnimator>(); // Animator'ü de ekle
         enemy.Setup(enemyData.attack, enemyData.shield);
 
         UpdateUI();
         StartCoroutine(BattleRoutine());
     }
 
+    // --- YENİ EŞ ZAMANLI SAVAŞ RUTİNİ ---
     IEnumerator BattleRoutine()
     {
         yield return new WaitForSeconds(1.5f);
 
-        // Her iki karakterin de kalkanı 0'dan büyük olduğu sürece döngü devam eder
         while (player.currentShield > 0 && enemy.currentShield > 0)
         {
-            // O anki attack değerlerini hasar olarak belirle
+            // O anki hasar değerlerini önceden al
             int playerDamage = player.currentAttack;
             int enemyDamage = enemy.currentAttack;
 
-            player.PlayAttackAnimation(enemy.transform);
-            enemy.PlayAttackAnimation(player.transform);
+            // 1. Her iki karakterin saldırı animasyonunu AYNI ANDA başlat
+            player.Animator.PlayAttackAnimation(enemy.transform);
+            enemy.Animator.PlayAttackAnimation(player.transform);
+            Camera.main.DOShakePosition(0.15f, 0.4f); // Kamera tek sefer sallansın
 
-            yield return new WaitForSeconds(0.6f);
+            // Animasyonların bitmesini bekle
+            yield return new WaitForSeconds(attackAnimDuration);
 
-            // Hasarı uygula (sadece shield'a)
+            // 2. Her iki karaktere de hasarı AYNI ANDA uygula
             player.TakeDamage(enemyDamage);
             enemy.TakeDamage(playerDamage);
-
             UpdateUI();
 
-            yield return new WaitForSeconds(attackInterval - 0.6f);
+            // Çatışmalar arası bekleme
+            yield return new WaitForSeconds(turnDelay);
         }
 
         EndBattle();
@@ -85,24 +93,24 @@ public class BattleManager : MonoBehaviour
 
     void EndBattle()
     {
-        // Savaş bittiğinde, PlayerDataManager'ı ejderhanın son durumuyla güncelle
         PlayerDataManager.Instance.SetStatsAfterBattle(player.currentShield);
 
+        // Not: Ölüm animasyonları artık Animator üzerinden çağrılıyor
         if (player.currentShield <= 0 && enemy.currentShield <= 0)
         {
             resultText.text = "Berabere!";
-            player.PlayDeathAnimation();
-            enemy.PlayDeathAnimation();
+            player.Animator.PlayDeathAnimation();
+            enemy.Animator.PlayDeathAnimation();
         }
         else if (player.currentShield <= 0)
         {
             resultText.text = "Kaybettin!";
-            player.PlayDeathAnimation();
+            player.Animator.PlayDeathAnimation();
         }
         else
         {
             resultText.text = "Kazandın!";
-            enemy.PlayDeathAnimation();
+            enemy.Animator.PlayDeathAnimation();
         }
 
         resultPanel.SetActive(true);
@@ -116,6 +124,8 @@ public class BattleManager : MonoBehaviour
 
     public void GoToHomeScene()
     {
+        // Sahne değiştirmeden önce tüm DOTween animasyonlarını durdurmak iyi bir pratiktir.
+        DOTween.KillAll();
         SceneManager.LoadScene("SampleScene");
     }
 }
