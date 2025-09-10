@@ -1,13 +1,15 @@
 using UnityEngine;
 
-[CreateAssetMenu(fileName = "New EnemyData", menuName = "Dragon Clicker/Enemy Data")]
+[CreateAssetMenu(fileName = "New Enemy Data", menuName = "Dragon Clicker/Enemy Data")]
 public class EnemyData : ScriptableObject
 {
     [Header("Enemy Stats")]
-    public string enemyName;
+    public int attack = 10;
+    public int shield = 50;
+
+    [Header("Visuals")]
     public Sprite enemySprite;
 
-    // "Power" yerine artık bu iki değer var.
-    public int attack;
-    public int shield;
+    [Header("Rewards")]
+    public int coinReward = 25; // Bu düşman yenildiğinde verilecek altın miktarı
 }

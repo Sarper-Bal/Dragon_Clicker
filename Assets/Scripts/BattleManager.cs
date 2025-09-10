@@ -35,15 +35,12 @@ public class BattleManager : MonoBehaviour
 
     void SetupBattle()
     {
-        // --- Oyuncu Kurulumu ---
         var playerData = PlayerDataManager.Instance;
         GameObject playerGO = Instantiate(playerPrefab, playerSpawnPoint.position, playerSpawnPoint.rotation);
-        // ÖNEMLİ: Artık iki script'i de ekliyoruz
         player = playerGO.AddComponent<BattleCharacter>();
-        playerGO.AddComponent<CharacterAnimator>(); // Animator'ü de ekle
+        playerGO.AddComponent<CharacterAnimator>();
         player.Setup(playerData.currentAttack, playerData.currentShield);
 
-        // --- Düşman Kurulumu ---
         EnemyData enemyData = currentLevel.enemiesInLevel[0];
         GameObject enemyGO = new GameObject("Enemy");
         enemyGO.transform.position = enemySpawnPoint.position;
@@ -51,40 +48,33 @@ public class BattleManager : MonoBehaviour
         sr.sprite = enemyData.enemySprite;
         sr.sortingOrder = 5;
         enemyGO.transform.localScale = new Vector3(1.5f, 1.5f, 1.5f);
-        // ÖNEMLİ: Artık iki script'i de ekliyoruz
         enemy = enemyGO.AddComponent<BattleCharacter>();
-        enemyGO.AddComponent<CharacterAnimator>(); // Animator'ü de ekle
+        enemyGO.AddComponent<CharacterAnimator>();
         enemy.Setup(enemyData.attack, enemyData.shield);
 
         UpdateUI();
         StartCoroutine(BattleRoutine());
     }
 
-    // --- YENİ EŞ ZAMANLI SAVAŞ RUTİNİ ---
     IEnumerator BattleRoutine()
     {
         yield return new WaitForSeconds(1.5f);
 
         while (player.currentShield > 0 && enemy.currentShield > 0)
         {
-            // O anki hasar değerlerini önceden al
             int playerDamage = player.currentAttack;
             int enemyDamage = enemy.currentAttack;
 
-            // 1. Her iki karakterin saldırı animasyonunu AYNI ANDA başlat
             player.Animator.PlayAttackAnimation(enemy.transform);
             enemy.Animator.PlayAttackAnimation(player.transform);
-            Camera.main.DOShakePosition(0.15f, 0.4f); // Kamera tek sefer sallansın
+            Camera.main.DOShakePosition(0.15f, 0.4f);
 
-            // Animasyonların bitmesini bekle
             yield return new WaitForSeconds(attackAnimDuration);
 
-            // 2. Her iki karaktere de hasarı AYNI ANDA uygula
             player.TakeDamage(enemyDamage);
             enemy.TakeDamage(playerDamage);
             UpdateUI();
 
-            // Çatışmalar arası bekleme
             yield return new WaitForSeconds(turnDelay);
         }
 
@@ -95,22 +85,32 @@ public class BattleManager : MonoBehaviour
     {
         PlayerDataManager.Instance.SetStatsAfterBattle(player.currentShield);
 
-        // Not: Ölüm animasyonları artık Animator üzerinden çağrılıyor
+        // Ödül verilecek düşmanın verisini al
+        EnemyData defeatedEnemyData = currentLevel.enemiesInLevel[0];
+
         if (player.currentShield <= 0 && enemy.currentShield <= 0)
         {
             resultText.text = "Berabere!";
             player.Animator.PlayDeathAnimation();
             enemy.Animator.PlayDeathAnimation();
+
+            // Berabere kalınca ödülün yarısını ver
+            int coinAmount = Mathf.CeilToInt(defeatedEnemyData.coinReward / 2f);
+            PlayerDataManager.Instance.AddCoins(coinAmount);
         }
         else if (player.currentShield <= 0)
         {
             resultText.text = "Kaybettin!";
             player.Animator.PlayDeathAnimation();
+            // Kaybedince coin verilmez.
         }
         else
         {
             resultText.text = "Kazandın!";
             enemy.Animator.PlayDeathAnimation();
+
+            // Kazanınca ödülün tamamını ver
+            PlayerDataManager.Instance.AddCoins(defeatedEnemyData.coinReward);
         }
 
         resultPanel.SetActive(true);
@@ -124,7 +124,6 @@ public class BattleManager : MonoBehaviour
 
     public void GoToHomeScene()
     {
-        // Sahne değiştirmeden önce tüm DOTween animasyonlarını durdurmak iyi bir pratiktir.
         DOTween.KillAll();
         SceneManager.LoadScene("SampleScene");
     }
